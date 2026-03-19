@@ -133,7 +133,7 @@ def render_card(n):
         if url_exact:
             link_html = f'<a href="{escape(url)}" target="_blank" rel="noopener" class="read-link">Llegir →</a>'
         else:
-            link_html = f'<a href="{escape(url)}" target="_blank" rel="noopener" class="read-link read-link-approx" title="Enllaç aproximat al mitjà, no a l'article concret">Llegir (portal) →</a>'
+            link_html = f'<a href="{escape(url)}" target="_blank" rel="noopener" class="read-link read-link-approx" title="Enllac aproximat al mija, no a larticle concret">Llegir (portal) →</a>'
     else:
         link_html = '<span class="no-link">Enllaç no disponible</span>'
     return f"""
