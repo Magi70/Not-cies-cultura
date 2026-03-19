@@ -8,6 +8,7 @@ import anthropic
 import json
 import re
 import sys
+import time
 from datetime import datetime, timezone
 
 # ── Constants ────────────────────────────────────────────────────────────────
@@ -108,14 +109,27 @@ def fetch_news():
 
     print("✅ Pas 1 completat.")
 
-    # Step 2: format as JSON (no tools needed)
+    # Extract only the text summary from step1 (avoids sending 84 blocks to step2)
+    # This prevents rate limit errors by drastically reducing input tokens
+    summary_text = " ".join(
+        b.text for b in step1.content if hasattr(b, "text") and b.text
+    ).strip()
+    print(f"   Resum extret: {len(summary_text)} caràcters")
+
+    # Wait 30 seconds to avoid rate limit (tokens per minute)
+    print("⏳ Esperant 30s per evitar rate limit...")
+    time.sleep(30)
+
+    # Step 2: fresh conversation with just the summary + format request
     print("📋 Pas 2: Formatejant com a JSON...")
-    messages.append({"role": "user", "content": FORMAT_PROMPT})
+    step2_messages = [
+        {"role": "user", "content": f"Here is a summary of cultural news I found today ({TODAY_ISO}):\n\n{summary_text}\n\n{FORMAT_PROMPT}"}
+    ]
 
     step2 = client.messages.create(
         model="claude-sonnet-4-20250514",
         max_tokens=6000,
-        messages=messages,
+        messages=step2_messages,
     )
 
     raw = "".join(b.text for b in step2.content if hasattr(b, "text"))
