@@ -31,19 +31,17 @@ UPDATED_AT = datetime.now(timezone.utc).strftime("%d/%m/%Y a les %H:%M UTC")
 def fetch_news():
     client = anthropic.Anthropic()
 
-    # ── Step 1: search (prompt kept very short to avoid rate limits) ──
     print("📡 Pas 1: Cercant notícies...")
     search_prompt = f"Cerca notícies culturals de les últimes 48h ({TODAY_ISO}) de Catalunya, Espanya i Europa. Inclou notícies i articles d'opinió sobre música, arts, patrimoni, teatre, literatura, cinema, política cultural. Cerca a: La Vanguardia, El País, Ara, Núvol, RTVE Cultura, The Guardian, Le Monde. Per cada notícia anota el títol original, el resum en l'idioma original i la URL directa a l'article (no la portada)."
 
     step1 = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-haiku-4-5-20251001",
         max_tokens=4000,
         tools=[{"type": "web_search_20250305", "name": "web_search"}],
         messages=[{"role": "user", "content": search_prompt}],
     )
     print(f"   stop_reason: {step1.stop_reason}, blocks: {len(step1.content)}")
 
-    # Continue if tool_use
     messages = [
         {"role": "user", "content": search_prompt},
         {"role": "assistant", "content": step1.content},
@@ -55,7 +53,7 @@ def fetch_news():
         ]
         messages.append({"role": "user", "content": tool_results})
         step1 = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-haiku-4-5-20251001",
             max_tokens=4000,
             tools=[{"type": "web_search_20250305", "name": "web_search"}],
             messages=messages,
@@ -63,35 +61,32 @@ def fetch_news():
         messages.append({"role": "assistant", "content": step1.content})
         print(f"   continuació stop_reason={step1.stop_reason}")
 
-    # Extract text summary only
     summary = " ".join(b.text for b in step1.content if hasattr(b, "text") and b.text).strip()
     print(f"✅ Pas 1 OK. Resum: {len(summary)} chars")
 
-    # ── Wait to reset token-per-minute counter ──
     print("⏳ Esperant 60s...")
     time.sleep(60)
 
-    # ── Step 2: format as JSON (fresh conversation, short context) ──
     print("📋 Pas 2: Formatejant JSON...")
     format_prompt = f"""Aquestes són les notícies culturals trobades:
 
 {summary[:8000]}
 
 Retorna NOMÉS un objecte JSON. Sense markdown, sense text fora. Estructura:
-{{"sections":[{{"theme":"TEMA","news":[{{"title":"titular en idioma original","summary":"resum 2 línies en idioma original","source":"nom del mitjà","geo":"GEO","url":"URL o null","url_exact":true/false,"type":"TIPUS"}}]}}]}}
+{{"sections":[{{"theme":"TEMA","news":[{{"title":"titular en idioma original","summary":"resum 2 línies en idioma original","source":"nom del mitjà","geo":"GEO","url":"URL o null","url_exact":true,"type":"TIPUS"}}]}}]}}
 
 Regles:
 - title i summary: en l'idioma original de la notícia (català, castellà, anglès, francès...)
 - url: URL directa a l'article si la tens, si no posa null
-- url_exact: true si és l'URL directa a l'article, false si és la portada del mitjà o no n'hi ha
+- url_exact: true si és l'URL directa a l'article, false si és la portada del mitjà
 - theme: Música|Arts visuals|Patrimoni|Teatre i dansa|Literatura|Cinema i audiovisual|Política cultural|Festivals i esdeveniments|Opinió|Altres
-- geo: Catalunya|Espanya|Europa  
+- geo: Catalunya|Espanya|Europa
 - type: news|opinion
 
 Comença amb {{ acaba amb }}. Res més."""
 
     step2 = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-haiku-4-5-20251001",
         max_tokens=4000,
         messages=[{"role": "user", "content": format_prompt}],
     )
@@ -133,7 +128,7 @@ def render_card(n):
         if url_exact:
             link_html = f'<a href="{escape(url)}" target="_blank" rel="noopener" class="read-link">Llegir →</a>'
         else:
-            link_html = f'<a href="{escape(url)}" target="_blank" rel="noopener" class="read-link read-link-approx" title="Enllac aproximat al mija, no a larticle concret">Llegir (portal) →</a>'
+            link_html = f'<a href="{escape(url)}" target="_blank" rel="noopener" class="read-link read-link-approx">Llegir (portal) →</a>'
     else:
         link_html = '<span class="no-link">Enllaç no disponible</span>'
     return f"""
