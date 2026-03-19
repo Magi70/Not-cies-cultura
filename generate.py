@@ -36,7 +36,7 @@ def fetch_news():
     search_prompt = f"Search for cultural news from the last 48h ({TODAY_ISO}) in Catalunya, Spain and Europe. Include news and opinion pieces about music, arts, heritage, theatre, literature, cinema, cultural policy. Search in La Vanguardia, El País, Ara, Núvol, RTVE Cultura, The Guardian, Le Monde."
 
     step1 = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-haiku-4-5-20251001",
         max_tokens=4000,
         tools=[{"type": "web_search_20250305", "name": "web_search"}],
         messages=[{"role": "user", "content": search_prompt}],
@@ -55,7 +55,7 @@ def fetch_news():
         ]
         messages.append({"role": "user", "content": tool_results})
         step1 = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-haiku-4-5-20251001",
             max_tokens=4000,
             tools=[{"type": "web_search_20250305", "name": "web_search"}],
             messages=messages,
@@ -87,7 +87,7 @@ type: news|opinion
 Start with {{ end with }}. Nothing else."""
 
     step2 = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-haiku-4-5-20251001",
         max_tokens=4000,
         messages=[{"role": "user", "content": format_prompt}],
     )
