@@ -1,0 +1,37 @@
+name: Actualitzar Notícies de Cultura
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # 7h hora espanyola (UTC+1) / 6h UTC
+  workflow_dispatch:       # Permet executar manualment des de GitHub
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install anthropic requests
+
+      - name: Generate news page
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python generate.py
+
+      - name: Commit and push
+        run: |
+          git config user.name "Diari Cultura Bot"
+          git config user.email "bot@diari-cultura"
+          git add index.html
+          git diff --staged --quiet || git commit -m "Notícies actualitzades - $(date '+%d/%m/%Y %H:%M')"
+          git push
