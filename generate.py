@@ -33,10 +33,10 @@ def fetch_news():
 
     # ── Step 1: search (prompt kept very short to avoid rate limits) ──
     print("📡 Pas 1: Cercant notícies...")
-    search_prompt = f"Search for cultural news from the last 48h ({TODAY_ISO}) in Catalunya, Spain and Europe. Include news and opinion pieces about music, arts, heritage, theatre, literature, cinema, cultural policy. Search in La Vanguardia, El País, Ara, Núvol, RTVE Cultura, The Guardian, Le Monde."
+    search_prompt = f"Cerca notícies culturals de les últimes 48h ({TODAY_ISO}) de Catalunya, Espanya i Europa. Inclou notícies i articles d'opinió sobre música, arts, patrimoni, teatre, literatura, cinema, política cultural. Cerca a: La Vanguardia, El País, Ara, Núvol, RTVE Cultura, The Guardian, Le Monde. Per cada notícia anota el títol original, el resum en l'idioma original i la URL directa a l'article (no la portada)."
 
     step1 = client.messages.create(
-        model="claude-haiku-4-5-20251001",
+        model="claude-sonnet-4-20250514",
         max_tokens=4000,
         tools=[{"type": "web_search_20250305", "name": "web_search"}],
         messages=[{"role": "user", "content": search_prompt}],
@@ -55,7 +55,7 @@ def fetch_news():
         ]
         messages.append({"role": "user", "content": tool_results})
         step1 = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model="claude-sonnet-4-20250514",
             max_tokens=4000,
             tools=[{"type": "web_search_20250305", "name": "web_search"}],
             messages=messages,
@@ -73,21 +73,25 @@ def fetch_news():
 
     # ── Step 2: format as JSON (fresh conversation, short context) ──
     print("📋 Pas 2: Formatejant JSON...")
-    format_prompt = f"""Based on these cultural news findings:
+    format_prompt = f"""Aquestes són les notícies culturals trobades:
 
 {summary[:8000]}
 
-Return ONLY a raw JSON object (no markdown, no text outside). Structure:
-{{"sections":[{{"theme":"THEME","news":[{{"title":"...","summary":"2 lines max","source":"...","geo":"GEO","url":"https://...","type":"TYPE"}}]}}]}}
+Retorna NOMÉS un objecte JSON. Sense markdown, sense text fora. Estructura:
+{{"sections":[{{"theme":"TEMA","news":[{{"title":"titular en idioma original","summary":"resum 2 línies en idioma original","source":"nom del mitjà","geo":"GEO","url":"URL o null","url_exact":true/false,"type":"TIPUS"}}]}}]}}
 
-theme: Música|Arts visuals|Patrimoni|Teatre i dansa|Literatura|Cinema i audiovisual|Política cultural|Festivals i esdeveniments|Opinió|Altres
-geo: Catalunya|Espanya|Europa
-type: news|opinion
+Regles:
+- title i summary: en l'idioma original de la notícia (català, castellà, anglès, francès...)
+- url: URL directa a l'article si la tens, si no posa null
+- url_exact: true si és l'URL directa a l'article, false si és la portada del mitjà o no n'hi ha
+- theme: Música|Arts visuals|Patrimoni|Teatre i dansa|Literatura|Cinema i audiovisual|Política cultural|Festivals i esdeveniments|Opinió|Altres
+- geo: Catalunya|Espanya|Europa  
+- type: news|opinion
 
-Start with {{ end with }}. Nothing else."""
+Comença amb {{ acaba amb }}. Res més."""
 
     step2 = client.messages.create(
-        model="claude-haiku-4-5-20251001",
+        model="claude-sonnet-4-20250514",
         max_tokens=4000,
         messages=[{"role": "user", "content": format_prompt}],
     )
@@ -123,8 +127,15 @@ def render_card(n):
         else f'<span class="source-tag">{escape(n.get("source",""))}</span>'
     )
     author_html = f'<div class="opinion-author">{escape(n.get("source",""))}</div>' if is_opinion else ""
-    url = n.get("url", "")
-    link_html = f'<a href="{escape(url)}" target="_blank" rel="noopener" class="read-link">Llegir →</a>' if url.startswith("http") else ""
+    url = n.get("url") or ""
+    url_exact = n.get("url_exact", True)
+    if url and url.startswith("http"):
+        if url_exact:
+            link_html = f'<a href="{escape(url)}" target="_blank" rel="noopener" class="read-link">Llegir →</a>'
+        else:
+            link_html = f'<a href="{escape(url)}" target="_blank" rel="noopener" class="read-link read-link-approx" title="Enllaç aproximat al mitjà, no a l'article concret">Llegir (portal) →</a>'
+    else:
+        link_html = '<span class="no-link">Enllaç no disponible</span>'
     return f"""
       <div class="news-card{opinion_class}">
         <div class="card-top">{source_html}<span class="geo-tag">{escape(n.get("geo",""))}</span></div>
@@ -196,6 +207,9 @@ def generate_html(data):
   .news-card p{{font-size:0.82rem;line-height:1.6;color:#4A4540;flex-grow:1;}}
   .read-link{{font-size:0.72rem;font-weight:500;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink);text-decoration:none;border-bottom:1px solid var(--ink);padding-bottom:1px;align-self:flex-start;transition:color 0.15s,border-color 0.15s;}}
   .read-link:hover{{color:var(--accent);border-color:var(--accent);}}
+  .read-link-approx{{color:var(--muted);border-color:var(--muted);font-style:italic;}}
+  .read-link-approx:hover{{color:var(--accent);border-color:var(--accent);}}
+  .no-link{{font-size:0.72rem;color:var(--muted);letter-spacing:0.04em;font-style:italic;}}
   footer{{text-align:center;padding:2rem;font-size:0.72rem;color:var(--muted);border-top:1px solid var(--border);letter-spacing:0.04em;}}
   @media(max-width:640px){{header{{padding:1.25rem 1.5rem 1rem;flex-direction:column;align-items:flex-start;gap:0.75rem;}}main{{padding:1.5rem;}}.masthead h1{{font-size:1.8rem;}}.news-grid{{grid-template-columns:1fr;}}}}
 </style>
