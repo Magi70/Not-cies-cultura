@@ -31,25 +31,25 @@ UPDATED_AT = datetime.now(timezone.utc).strftime("%d/%m/%Y a les %H:%M UTC")
 def fetch_news():
     client = anthropic.Anthropic()
 
-    # ── Pas 1: cerques específiques per font amb Sonnet ──
+    # ── Pas 1: cerca amb Haiku + web_search ──
     print("📡 Pas 1: Cercant notícies...")
 
-    search_prompt = f"""Today is {TODAY_ISO}. Search for recent cultural news from the last 48 hours using these specific searches one by one:
+    search_prompt = f"""Today is {TODAY_ISO}. Search for recent cultural news published today or yesterday using these specific searches:
 
 1. site:lavanguardia.com cultura
 2. site:elpais.com cultura
 3. site:ara.cat cultura
-4. site:nucleol.cat OR site:nuvol.com cultura
+4. site:nuvol.com cultura
 5. site:rtve.es cultura
 6. site:elcultural.com
 7. site:theguardian.com culture
 8. site:lemonde.fr culture
 
-For each search, find the most recent articles published today or yesterday ({TODAY_ISO}). For each article note: exact title, 2-line summary in the original language, source name, and the exact URL of the article."""
+For each search find the most recent articles. Note the exact title, a 2-line summary in the original language, the source name, and the exact article URL."""
 
     step1 = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=5000,
+        model="claude-haiku-4-5-20251001",
+        max_tokens=4000,
         tools=[{"type": "web_search_20250305", "name": "web_search"}],
         messages=[{"role": "user", "content": search_prompt}],
     )
@@ -66,24 +66,25 @@ For each search, find the most recent articles published today or yesterday ({TO
         ]
         messages.append({"role": "user", "content": tool_results})
         step1 = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=5000,
+            model="claude-haiku-4-5-20251001",
+            max_tokens=4000,
             tools=[{"type": "web_search_20250305", "name": "web_search"}],
             messages=messages,
         )
         messages.append({"role": "assistant", "content": step1.content})
         print(f"   continuació stop_reason={step1.stop_reason}")
 
+    # Extreu només el text — no passar tots els blocs al pas 2
     summary = " ".join(b.text for b in step1.content if hasattr(b, "text") and b.text).strip()
     print(f"✅ Pas 1 OK. Resum: {len(summary)} chars")
 
-    # ── Espera per resetejar el comptador de tokens per minut ──
-    print("⏳ Esperant 90s...")
-    time.sleep(90)
+    # ── Espera breu ──
+    print("⏳ Esperant 30s...")
+    time.sleep(30)
 
-    # ── Pas 2: formatejar JSON amb Haiku ──
+    # ── Pas 2: formatejar JSON amb Haiku (context net, sense historial) ──
     print("📋 Pas 2: Formatejant JSON...")
-    format_prompt = f"""Aquestes són les notícies culturals trobades:
+    format_prompt = f"""Aquestes són les notícies culturals trobades avui:
 
 {summary[:6000]}
 
@@ -91,9 +92,9 @@ Retorna NOMÉS un objecte JSON. Sense markdown, sense text fora. Estructura:
 {{"sections":[{{"theme":"TEMA","news":[{{"title":"titular en idioma original","summary":"resum 2 línies en idioma original","source":"nom del mitjà","geo":"GEO","url":"URL o null","url_exact":true,"type":"TIPUS"}}]}}]}}
 
 Regles:
-- title i summary: en l'idioma original de la notícia (català, castellà, anglès, francès...)
+- title i summary: en l'idioma original de la notícia
 - url: URL directa a l'article si la tens, si no posa null
-- url_exact: true si és URL directa a l'article, false si és portada del mitjà
+- url_exact: true si és URL directa, false si és portada del mitjà
 - theme: Música|Arts visuals|Patrimoni|Teatre i dansa|Literatura|Cinema i audiovisual|Política cultural|Festivals i esdeveniments|Opinió|Altres
 - geo: Catalunya|Espanya|Europa
 - type: news|opinion
