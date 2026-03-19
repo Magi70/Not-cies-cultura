@@ -2,6 +2,7 @@
 """
 Genera el HTML estàtic amb les notícies culturals del dia.
 S'executa cada matí via GitHub Actions.
+Estratègia: web_fetch directe a les pàgines de cultura de cada mitjà.
 """
 
 import anthropic
@@ -27,25 +28,111 @@ TODAY = datetime.now(timezone.utc).strftime("%d/%m/%Y")
 TODAY_ISO = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 UPDATED_AT = datetime.now(timezone.utc).strftime("%d/%m/%Y a les %H:%M UTC")
 
+# ── URLs predefinides de seccions de cultura ──────────────────────────────────
+# Afegeix o elimina URLs aquí per personalitzar les fonts
+CULTURE_URLS = [
+    # Catalunya
+    "https://www.lavanguardia.com/cultura",
+    "https://www.ara.cat/cultura",
+    "https://www.nuvol.com",
+    "https://www.ccma.cat/324/cultura",
+    "https://www.elperiodico.com/es/ocio-y-cultura",
+    "https://www.elnacional.cat/ca/cultura",
+    "https://www.vilaweb.cat/categoria/cultura/",
+    "https://www.timeout.cat/barcelona/ca/arts-i-cultura",
+    "https://www.catorze.cat/",
+    "https://www.beteve.cat/cultura/",
+    "https://www.revistamirall.com/categoria/cultura/",
+    "https://www.llegir.cat/",
+    
+    # Espanya
+    "https://elpais.com/cultura",
+    "https://www.elmundo.es/cultura.html",
+    "https://elcultural.com",
+    "https://www.rtve.es/cultura",
+    "https://www.abc.es/cultura/",
+    "https://www.larazon.es/cultura/",
+    "https://www.publico.es/culturas/",
+    "https://www.eldiario.es/cultura/",
+    "https://www.20minutos.es/cultura/",
+    "https://www.europapress.es/cultura/",
+    "https://www.huffingtonpost.es/life/cultura/",
+    
+    # Regne Unit
+    "https://www.theguardian.com/culture",
+    "https://www.bbc.co.uk/culture",
+    "https://www.telegraph.co.uk/culture/",
+    "https://www.independent.co.uk/arts-entertainment",
+    "https://www.thetimes.co.uk/culture",
+    "https://www.ft.com/arts",
+    "https://www.timeout.com/london/arts-and-culture",
+    "https://www.standard.co.uk/culture",
+    "https://www.nme.com",
+    "https://www.classicfm.com/discover-music/",
+    
+    # França
+    "https://www.lemonde.fr/culture",
+    "https://www.lefigaro.fr/culture",
+    "https://www.liberation.fr/culture/",
+    "https://www.telerama.fr/",
+    "https://www.franceculture.fr/",
+    "https://www.francetvinfo.fr/culture/",
+    "https://www.lesechos.fr/weekend/culture",
+    "https://www.radiofrance.fr/franceinter/culture",
+    "https://www.parismatch.com/culture",
+    "https://www.lexpress.fr/culture/",
+    
+    # Itàlia
+    "https://www.corriere.it/cultura",
+    "https://www.repubblica.it/cultura",
+    "https://www.ilsole24ore.com/cultura",
+    "https://www.lastampa.it/cultura/",
+    "https://www.ilgiornale.it/sezione/cultura.html",
+    "https://www.ansa.it/cultura/",
+    "https://www.artribune.com/",
+    "https://www.rollingstone.it/",
+    "https://www.raiplay.it/cultura",
+    "https://www.ilpost.it/cultura/",
+    
+    # Alemanya
+    "https://www.sueddeutsche.de/kultur",
+    "https://www.zeit.de/kultur/index",
+    "https://www.spiegel.de/kultur/",
+    "https://www.faz.net/aktuell/feuilleton/",
+    "https://www.welt.de/kultur/",
+    "https://www.tagesspiegel.de/kultur/",
+    "https://www.dw.com/de/kultur/s-9077",
+    "https://www.deutschlandfunkkultur.de/",
+    "https://www.berliner-zeitung.de/kultur-vergnuegen/",
+    "https://www.taz.de/Kultur/!t5008/",
+    
+    # Portugal
+    "https://www.publico.pt/culturaipsilon",
+    "https://expresso.pt/cultura",
+    "https://observador.pt/seccao/cultura/",
+    "https://www.dn.pt/cultura/",
+    "https://www.jn.pt/artes/",
+    "https://www.rtp.pt/cultura",
+    "https://timeout.pt/lisboa/pt/arte",
+    "https://www.sabado.pt/cultura",
+    "https://blitz.pt/",
+    "https://www.nit.pt/cultura",
+]
+
 
 def fetch_news():
     client = anthropic.Anthropic()
 
-    # ── Pas 1: cerca amb Haiku + web_search ──
-    print("📡 Pas 1: Cercant notícies...")
+    print("📡 Cercant notícies via web_search...")
 
-    search_prompt = f"""Today is {TODAY_ISO}. Search for recent cultural news published today or yesterday using these specific searches:
+    # Construïm un prompt curt que demana cercar a les URLs predefinides
+    urls_list = "\n".join(f"- {url}" for url in CULTURE_URLS[:10])  # màx 10 per sessió
+    
+    search_prompt = f"""Today is {TODAY_ISO}. Search for the most recent cultural news published today or yesterday from these specific culture sections:
 
-1. site:lavanguardia.com cultura
-2. site:elpais.com cultura
-3. site:ara.cat cultura
-4. site:nuvol.com cultura
-5. site:rtve.es cultura
-6. site:elcultural.com
-7. site:theguardian.com culture
-8. site:lemonde.fr culture
+{urls_list}
 
-For each search find the most recent articles. Note the exact title, a 2-line summary in the original language, the source name, and the exact article URL."""
+For each source, find 1-2 recent articles. Extract: exact headline in original language, 2-line summary in original language, source name, and the exact article URL."""
 
     step1 = client.messages.create(
         model="claude-haiku-4-5-20251001",
@@ -74,17 +161,14 @@ For each search find the most recent articles. Note the exact title, a 2-line su
         messages.append({"role": "assistant", "content": step1.content})
         print(f"   continuació stop_reason={step1.stop_reason}")
 
-    # Extreu només el text — no passar tots els blocs al pas 2
     summary = " ".join(b.text for b in step1.content if hasattr(b, "text") and b.text).strip()
-    print(f"✅ Pas 1 OK. Resum: {len(summary)} chars")
+    print(f"✅ Cerca OK. {len(summary)} chars")
 
-    # ── Espera breu ──
     print("⏳ Esperant 30s...")
     time.sleep(30)
 
-    # ── Pas 2: formatejar JSON amb Haiku (context net, sense historial) ──
-    print("📋 Pas 2: Formatejant JSON...")
-    format_prompt = f"""Aquestes són les notícies culturals trobades avui:
+    print("📋 Formatejant JSON...")
+    format_prompt = f"""Aquestes són les notícies culturals trobades avui ({TODAY_ISO}):
 
 {summary[:6000]}
 
@@ -94,7 +178,7 @@ Retorna NOMÉS un objecte JSON. Sense markdown, sense text fora. Estructura:
 Regles:
 - title i summary: en l'idioma original de la notícia
 - url: URL directa a l'article si la tens, si no posa null
-- url_exact: true si és URL directa, false si és portada del mitjà
+- url_exact: true si és URL directa a l'article, false si és portada del mitjà
 - theme: Música|Arts visuals|Patrimoni|Teatre i dansa|Literatura|Cinema i audiovisual|Política cultural|Festivals i esdeveniments|Opinió|Altres
 - geo: Catalunya|Espanya|Europa
 - type: news|opinion
@@ -118,7 +202,7 @@ Comença amb {{ acaba amb }}. Res més."""
 
     data = json.loads(raw[first:last + 1])
     total = sum(len(s.get("news", [])) for s in data.get("sections", []))
-    print(f"✅ Pas 2 OK. Seccions: {len(data['sections'])}, Notícies: {total}")
+    print(f"✅ JSON OK. Seccions: {len(data['sections'])}, Notícies: {total}")
     return data
 
 
